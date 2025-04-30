@@ -91,21 +91,51 @@ export class IngramService {
     }
   }
 
-  async processProducts(ingramPartNumbers: string[]) {
+  async processProducts(ingramPartNumbers: string[]): Promise<any[]> {
     const batchSize = 50;
     const numProducts = ingramPartNumbers.length;
-    const allResults: any[] = [];
-  
+    const transformedResults: any[] = [];
+
     for (let i = 0; i < numProducts; i += batchSize) {
-        const batch = ingramPartNumbers.slice(i, i + batchSize);
-        console.log(`🚀 Procesando lote ${i / batchSize + 1} de ${Math.ceil(numProducts / batchSize)}`);
-        const products = await this.getPriceAndAvailability(batch);
-        allResults.push(...products);
+      const batch = ingramPartNumbers.slice(i, i + batchSize);
+      console.log(`🚀 Procesando lote ${i / batchSize + 1} de ${Math.ceil(numProducts / batchSize)}`);
+      const productsData = await this.getPriceAndAvailability(batch);
+
+      if (productsData) {
+        const transformedBatch = productsData.map((product: any, index) => {
+          const warehouseInfo =
+            product.availability &&
+            product.availability.availabilityByWarehouse &&
+            product.availability.availabilityByWarehouse.length > 0
+              ? product.availability.availabilityByWarehouse[0]
+              : {};
+
+          return {
+            id: uuidv4(), // Generar un UUID para el id
+            SKU: product.ingramPartNumber,
+            nombre: product.description || 'no-existe',
+            descripcion: product.vendorName || '',
+            precio: product.pricing ? product.pricing.customerPrice : null,
+            descuentos: product.pricing ? product.pricing.webDiscountsAvailable : false,
+            estado: product.productStatusCode,
+            disponibilidad: product.availability ? product.availability.available : false,
+            imagen: 'https://aslan.es/wp-content/uploads/2019/05/IngramMicro.png', // Generar imagen por defecto
+            marca: product.vendorName || '',
+            categoria: 'Ingram',
+            cantidad: warehouseInfo ? warehouseInfo.quantityAvailable : 0,
+            warehouse: warehouseInfo ? warehouseInfo.location : null,
+            warehouseId: warehouseInfo ? warehouseInfo.warehouseId : null,
+            precioRetail: product.pricing ? product.pricing.retailPrice : '',
+            etiquetas: ['Ingram'],
+          };
+        });
+        transformedResults.push(...transformedBatch);
+      }
     }
-  
+
     console.log('🏁 ❇️❇️❇️ Proceso de obtención de productos completado.');
-    console.log('❇️❇️❇️ Cantidad de productos encontrados==> ', allResults.length);
-    return allResults;
+    console.log('❇️❇️❇️ Cantidad de productos transformados==> ', transformedResults.length);
+    return transformedResults;
   }
 }
 
