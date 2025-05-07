@@ -1,7 +1,7 @@
 /* Controlador NestJS: ingram.controller.ts */
 import { Controller, Post, Body, Get, Param } from '@nestjs/common';
 import { IngramService } from '../services/ingram.service';
-import { ProductoIngram } from 'src/models/ingram.models';
+import { ProductDetails, ProductoIngram, ProductAndDetailsResponse } from 'src/models/ingram.models';
 
 class PriceRequestDto {
   ingramPartNumbers: string[];
@@ -24,7 +24,7 @@ export class IngramController {
   @Post('products-details')
   async getOne(
     @Body() dto: PriceRequestDto
-  ): Promise<any[]> {
+  ): Promise<ProductAndDetailsResponse> {
     return this.ingramService.getProductsAndDetailsBatch(dto.ingramPartNumbers);
   }
 
@@ -35,3 +35,4 @@ export class IngramController {
     return 'API ingram is running.';
   }
 }
+

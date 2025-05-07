@@ -4,16 +4,7 @@ import * as puppeteer from 'puppeteer';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-
-export interface ProductDetails {
-  titulo: string | null;
-  categorias: string[];
-  descripcion: string | null;
-  imagenes: string[];
-  etiquetas: string;
-  especificaciones_tecnicas: Record<string, Record<string, string>>;
-  garantia_e_informacion_adicional: Record<string, string>;
-}
+import { ProductDetails } from 'src/models/ingram.models';
 
 @Injectable()
 export class ProductScraperService {

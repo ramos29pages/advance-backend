@@ -5,9 +5,10 @@ import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { SKUS } from 'src/constants/ingramPartNumbers';
-import { ProductDetails, ProductScraperService } from './product-scraper.service';
+import { ProductScraperService } from './product-scraper.service';
 import { ProductoIngram } from 'src/models/ingram.models';
 import pLimit from 'p-limit';
+import { ProductDetails } from 'src/models/ingram.models';
 
 
 interface TokenResponse {
@@ -180,32 +181,57 @@ export class IngramService {
     return results;
   }
 
-  async getProductsAndDetails(SKU: string): Promise<any> {
-    let product: ProductoIngram =
-      await this.processSingleProduct(SKU);
-      if(product.SKU){
-        let details: ProductDetails | null = await this.scraperService.scrapeProductDetails(
-          `https://co.ingrammicro.com/cep/app/product/productdetails?id=${SKU}`,
-        );
-        let result = { _sku: SKU, ...product, details: details}
-        return result;
-
-      }
-
-      return {_sku: SKU, product: {}, details: {}}
-
-
+  async getProductsAndDetails(SKU: string): Promise<{ _sku: string; product: ProductoIngram; details: ProductDetails | null } | null> {
+    try {
+      // Intentamos obtener el producto. Si no existe, processSingleProduct lanza NotFoundException
+      const product = await this.processSingleProduct(SKU);
+  
+      // Si lo obtuvimos, scrapeamos sus detalles
+      const details = await this.scraperService.scrapeProductDetails(
+        `https://co.ingrammicro.com/cep/app/product/productdetails?id=${SKU}`
+      );
+  
+      return { _sku: SKU, product, details };
+    } catch (err) {
+      // Si no existe o da cualquier error, lo registramos y devolvemos null para saltarlo en el batch
+      this.logger.warn(`⚠️ Producto ${SKU} saltado: ${err.message}`);
+      return null;
+    }
   }
 
 
   async getProductsAndDetailsBatch(
     skus: string[],
-  ): Promise<any[]> {
-    const limit = pLimit(10); // máximo 10 concurrencias
+  ): Promise<ProductAndDetailsResponse> {
+    const limit = pLimit(10);
     const tasks = skus.map(sku =>
-      limit(() => this.getProductsAndDetails(sku)),
+      limit(() => this.getProductsAndDetails(sku))
     );
-    return Promise.all(tasks);
+  
+    // Ejecutamos todas las promesas
+    const results = await Promise.all(tasks);
+  
+    // Separamos los que sí tienen valor de los null
+    const data = results.filter(item => item !== null) as Array<{
+      _sku: string;
+      product: ProductoIngram;
+      details: ProductDetails | null;
+    }>;
+  
+    const found = data.length;
+    const nulls = results.length - found;
+    const failed = 0;                   // getProductsAndDetails siempre captura internamente errores y devuelve null
+    const success = failed === 0;       // true si no hubo fallos inesperados
+  
+    return { success, found, nulls, failed, data };
   }
 
+}
+
+interface ProductAndDetailsResponse {
+  success: boolean;
+  found: number;    // cuántos productos se obtuvieron correctamente
+  nulls: number;    // cuántos SKUs devolvieron null (no encontrados o error interno)
+  failed: number;   // cuántos fallos inesperados (si los hubiera)
+  data: Array<{ _sku: string; product: ProductoIngram; details: ProductDetails | null }>;
 }
