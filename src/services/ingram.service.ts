@@ -1,10 +1,14 @@
 /* Servicio NestJS: ingram.service.ts */
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, NotFoundException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { SKUS } from 'src/constants/ingramPartNumbers';
+import { ProductDetails, ProductScraperService } from './product-scraper.service';
+import { ProductoIngram } from 'src/models/ingram.models';
+import pLimit from 'p-limit';
+
 
 interface TokenResponse {
   access_token: string;
@@ -22,6 +26,8 @@ export class IngramService {
   private clientSecret: string | undefined;
   private customerNumber: string | undefined;
   private senderId: string | undefined;
+  private URL_XADVANTAGE: string =
+    'https://co.ingrammicro.com/cep/app/product/productdetails?id=';
 
   private readonly logger = new Logger(IngramService.name);
   private readonly batchSize = 50;
@@ -29,13 +35,14 @@ export class IngramService {
   constructor(
     private httpService: HttpService,
     private config: ConfigService,
+    private scraperService: ProductScraperService,
   ) {
     this.clientId = this.config.get<string>('INGRAM_CLIENT_ID');
     this.clientSecret = this.config.get<string>('INGRAM_CLIENT_SECRET');
     this.customerNumber = this.config.get<string>('INGRAM_CUSTOMER_NUMBER');
     this.senderId = this.config.get<string>('INGRAM_SENDER_ID');
-    console.log('SKUS LOADES:: ',SKUS);
-    console.log('SKUS LOADES length:: ',SKUS.length);
+    console.log('SKUS LOADES:: ', SKUS);
+    console.log('SKUS LOADES length:: ', SKUS.length);
   }
 
   private async getAccessToken(): Promise<string> {
@@ -94,8 +101,57 @@ export class IngramService {
     }
   }
 
-  async processProducts(ingramPartNumbers: string[]): Promise<any[]> {
-    const results: any[] = [];
+  async processSingleProduct(
+    ingramPartNumber: string,
+  ): Promise<ProductoIngram> {
+    this.logger.log(`🚀 Procesando producto ${ingramPartNumber}`);
+  
+    const productsData = await this.getPriceAndAvailability([ingramPartNumber]);  // corregido
+  
+    // Filtrar sólo los disponibles
+    const availableProducts = productsData.filter(
+      p => p.availability?.available === true,
+    );
+  
+    if (availableProducts.length === 0) {
+      throw new NotFoundException(`Producto ${ingramPartNumber} no disponible`);
+    }
+  
+    // Transformar todos, pero devolver solo el primero
+    const transformed = availableProducts.map(p => this.transformProduct(p));
+    this.logger.log(`**Proceso completado. Producto disponible`);
+  
+    return transformed[0];           // ← aquí devolvemos un solo objeto  
+  }
+  
+
+  /** Extraer y normalizar un solo producto */
+  private transformProduct(product: any): ProductoIngram {
+    const wh = product.availability?.availabilityByWarehouse?.[0] ?? {};
+    return {
+      id: uuidv4(),
+      SKU: product.ingramPartNumber,
+      nombre: product.description || 'no-existe',
+      descripcion: product.vendorName || '',
+      precio: product.pricing?.customerPrice ?? null,
+      descuentos: product.pricing?.webDiscountsAvailable ?? false,
+      estado: product.productStatusCode,
+      disponibilidad: true, // ya filtramos, siempre es true
+      imagen: 'https://aslan.es/wp-content/uploads/2019/05/IngramMicro.png',
+      marca: product.vendorName || '',
+      categoria: 'Ingram',
+      cantidad: wh.quantityAvailable ?? 0,
+      warehouse: wh.location ?? null,
+      warehouseId: wh.warehouseId ?? null,
+      precioRetail: product.pricing?.retailPrice ?? '',
+      etiquetas: ['Ingram'],
+    };
+  }
+
+  async processProducts(
+    ingramPartNumbers: string[],
+  ): Promise<ProductoIngram[]> {
+    const results: ProductoIngram[] = [];
     const totalBatches = Math.ceil(ingramPartNumbers.length / this.batchSize);
 
     for (let i = 0; i < ingramPartNumbers.length; i += this.batchSize) {
@@ -107,43 +163,49 @@ export class IngramService {
       if (!productsData?.length) continue;
 
       // Filtrar primero los que tienen availability.available === true
-      const availableProducts = productsData.filter(p =>
-        p.availability?.available === true
+      const availableProducts = productsData.filter(
+        (p) => p.availability?.available === true,
       );
 
       // Transformar solo los filtrados
-      const transformed = availableProducts.map(p => this.transformProduct(p));
+      const transformed = availableProducts.map((p) =>
+        this.transformProduct(p),
+      );
       results.push(...transformed);
     }
 
-    this.logger.log(`**Proceso completado. Productos disponibles: ${results.length}`);
+    this.logger.log(
+      `**Proceso completado. Productos disponibles: ${results.length}`,
+    );
     return results;
   }
 
-  /** Extraer y normalizar un solo producto */
-  private transformProduct(product: any): any {
-    const wh = product.availability?.availabilityByWarehouse?.[0] ?? {};
-    return {
-      id:          uuidv4(),
-      SKU:         product.ingramPartNumber,
-      nombre:      product.description || 'no-existe',
-      descripcion: product.vendorName || '',
-      precio:      product.pricing?.customerPrice ?? null,
-      descuentos:  product.pricing?.webDiscountsAvailable ?? false,
-      estado:      product.productStatusCode,
-      disponibilidad: true,                   // ya filtramos, siempre es true
-      imagen:      'https://aslan.es/wp-content/uploads/2019/05/IngramMicro.png',
-      marca:       product.vendorName || '',
-      categoria:   'Ingram',
-      cantidad:    wh.quantityAvailable  ?? 0,
-      warehouse:   wh.location           ?? null,
-      warehouseId: wh.warehouseId        ?? null,
-      precioRetail:product.pricing?.retailPrice ?? '',
-      etiquetas:   ['Ingram'],
-    };
+  async getProductsAndDetails(SKU: string): Promise<any> {
+    let product: ProductoIngram =
+      await this.processSingleProduct(SKU);
+      if(product.SKU){
+        let details: ProductDetails | null = await this.scraperService.scrapeProductDetails(
+          `https://co.ingrammicro.com/cep/app/product/productdetails?id=${SKU}`,
+        );
+        let result = { _sku: SKU, ...product, details: details}
+        return result;
+
+      }
+
+      return {_sku: SKU, product: {}, details: {}}
+
+
   }
 
 
+  async getProductsAndDetailsBatch(
+    skus: string[],
+  ): Promise<any[]> {
+    const limit = pLimit(10); // máximo 10 concurrencias
+    const tasks = skus.map(sku =>
+      limit(() => this.getProductsAndDetails(sku)),
+    );
+    return Promise.all(tasks);
+  }
+
 }
-
-
