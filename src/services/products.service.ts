@@ -6,6 +6,7 @@ import {
   ProductAndDetailsResponse,
 } from '../models/ingram.models';
 import { Logger } from '@nestjs/common';
+import { closeSync } from 'fs';
 
 @Injectable()
 export class ProductsService {
@@ -60,6 +61,9 @@ export class ProductsService {
     const [rows] = await this.pool.query<RowDataPacket[]>(
       'SELECT sku, product_json, details_json FROM advance_products;'
     );
+
+    console.log('Cantidad de productos advance encontrados :: ', rows.length);
+
     return rows.map(r => ({
       _sku: r.sku,
       product: JSON.parse(r.product_json) as any,
