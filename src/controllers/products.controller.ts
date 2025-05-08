@@ -7,7 +7,7 @@ import { ProductAndDetailsResponse } from '../models/ingram.models';
 export class ProductsController {
   constructor(private readonly svc: ProductsService) {}
 
-  @Post('batch')
+  @Post('ingram')
   async saveBatch(@Body() payload: ProductAndDetailsResponse) {
     await this.svc.saveAll(payload);
     return { message: 'Batch guardado' };

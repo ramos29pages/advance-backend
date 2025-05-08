@@ -44,7 +44,7 @@ export class IngramService {
     this.clientSecret = this.config.get<string>('INGRAM_CLIENT_SECRET');
     this.customerNumber = this.config.get<string>('INGRAM_CUSTOMER_NUMBER');
     this.senderId = this.config.get<string>('INGRAM_SENDER_ID');
-    console.log('SKUS DELL LOADES:: ', ingramPartDellNumbers);
+    // console.log('SKUS DELL LOADES:: ', ingramPartDellNumbers);
     this.logger.log(`cantidade de productos Dell ${ingramPartDellNumbers.length}`);
    }
 
