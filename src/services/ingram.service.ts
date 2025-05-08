@@ -4,11 +4,12 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
-import { SKUS } from 'src/constants/ingramPartNumbers';
+import { ingramPartDellNumbers } from 'src/constants/ingramPartDellNumbers';
 import { ProductScraperService } from './product-scraper.service';
 import { ProductoIngram } from 'src/models/ingram.models';
 import pLimit from 'p-limit';
 import { ProductDetails } from 'src/models/ingram.models';
+import { SKUS } from './../constants/ingramPartNumbers';
 
 
 interface TokenResponse {
@@ -33,6 +34,7 @@ export class IngramService {
   private readonly logger = new Logger(IngramService.name);
   private readonly batchSize = 50;
 
+
   constructor(
     private httpService: HttpService,
     private config: ConfigService,
@@ -42,9 +44,9 @@ export class IngramService {
     this.clientSecret = this.config.get<string>('INGRAM_CLIENT_SECRET');
     this.customerNumber = this.config.get<string>('INGRAM_CUSTOMER_NUMBER');
     this.senderId = this.config.get<string>('INGRAM_SENDER_ID');
-    console.log('SKUS LOADES:: ', SKUS);
-    console.log('SKUS LOADES length:: ', SKUS.length);
-  }
+    console.log('SKUS DELL LOADES:: ', ingramPartDellNumbers);
+    this.logger.log(`cantidade de productos Dell ${ingramPartDellNumbers.length}`);
+   }
 
   private async getAccessToken(): Promise<string> {
     const url = 'https://api.ingrammicro.com:443/oauth/oauth30/token';

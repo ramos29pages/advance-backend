@@ -5,12 +5,18 @@ import {
   ProductAdvance,
   ProductAndDetailsResponse,
 } from '../models/ingram.models';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class ProductsService {
+
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     @Inject('MYSQL_POOL') private pool: Pool,
   ) {}
+
+
 
   /** Persiste un arreglo de ProductAdvance en la BD */
   async saveAll(response: ProductAndDetailsResponse): Promise<void> {
@@ -37,9 +43,12 @@ export class ProductsService {
         );                                           // JSON en MySQL :contentReference[oaicite:11]{index=11}
       }
 
+      
       await conn.commit();
+      this.logger.log('Se han registrado exitosamente los productos');
     } catch (err) {
       await conn.rollback();
+      this.logger.log(`Error encontrado ${err}`);
       throw err;
     } finally {
       conn.release();
