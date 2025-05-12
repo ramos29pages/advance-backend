@@ -10,6 +10,8 @@ import { ProductScraperService } from './services/product-scraper.service';
 import { DatabaseModule } from './database/database.module';
 import { ProductsController } from './controllers/products.controller';
 import { ProductsService } from './services/products.service';
+import { NexsysController } from './controllers/nexys.controller';
+import { NexsysService } from './services/nexys.service';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { ProductsService } from './services/products.service';
       isGlobal: true, // para que las variables de entorno estén disponibles en toda la aplicación
     }),
   ],
-  controllers: [AppController, IngramController, ProductScraperController, ProductsController],
-  providers: [AppService, IngramService, ProductScraperService, ProductsService],
+  controllers: [AppController, IngramController, ProductScraperController, ProductsController, NexsysController],
+  providers: [AppService, IngramService, ProductScraperService, ProductsService, NexsysService],
 })
 export class AppModule {}
